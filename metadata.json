@@ -1,0 +1,6 @@
+{
+  "name": "IPTV Player",
+  "description": "Aplicación web para ver canales de IPTV públicos de iptv-org con reproductor de video m3u8 incorporado y filtros avanzados por género, país e idioma.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

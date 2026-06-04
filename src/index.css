@@ -1,0 +1,55 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Myriad Pro", "Myriad", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  --font-display: "Myriad Pro", "Myriad", "Segoe UI", Roboto, Arial, sans-serif;
+  --font-secondary: Arial, "Helvetica Neue", Helvetica, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  /* Corporate colors from Cabildo de Gran Canaria rules */
+  --color-cabildo-blue: #004993;
+  --color-cabildo-blue-hover: #00366d;
+  --color-cabildo-blue-light: #3385ff;
+  --color-cabildo-yellow: #ffd600;
+  --color-cabildo-yellow-hover: #e6c000;
+}
+
+/* Custom scrollbar styling for both light and dark modes */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: #27272a;
+  border-radius: 6px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 6px;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #3f3f46;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Typography styles matching corporate identity guidelines */
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-display);
+}
+
+.font-secondary {
+  font-family: var(--font-secondary);
+}
+
+
