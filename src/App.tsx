@@ -132,6 +132,22 @@ export default function App() {
   const [checkingChannel, setCheckingChannel] = useState<string | null>(null);
   const [channelStatusCache, setChannelStatusCache] = useState<Record<string, boolean>>({});
 
+  // Atajos de teclado (Hotkeys globales) - Nivel App
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      // Ignorar si el usuario está escribiendo o si presiona Command/Ctrl (no queremos sobreescribir atajos del SO)
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      
+      if (e.key.toLowerCase() === 'c') {
+        e.preventDefault();
+        setIsCinemaMode(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, []);
+
   // Sync favorites state changes with local storage
   useEffect(() => {
     try {
@@ -270,6 +286,58 @@ export default function App() {
   const activePage = activeTab === "favorites" ? currentFavPage 
                    : activeTab === "vlc" ? currentVlcPage 
                    : page;
+
+  // Testeo Preventivo en Segundo Plano (Background Check)
+  useEffect(() => {
+    // Collect channels that haven't been checked yet
+    let isSubscribed = true;
+    let timeoutId: NodeJS.Timeout;
+
+    const testNext = async (index: number) => {
+      if (!isSubscribed || index >= displayedChannels.length) return;
+      
+      const channel = displayedChannels[index];
+      
+      // If already checked or cached, skip instantly
+      setChannelStatusCache(currentCache => {
+        if (currentCache[channel.id] !== undefined) {
+          // Already have it cache, move to next instantly
+          timeoutId = setTimeout(() => testNext(index + 1), 10);
+          return currentCache;
+        }
+        
+        // Not checked yet, let's do the fetch outside state updater
+        (async () => {
+          try {
+            const res = await fetch(`/api/check-stream?url=${encodeURIComponent(channel.streamUrl)}`);
+            const data = await res.json();
+            if (isSubscribed && data && typeof data.active === "boolean") {
+              setChannelStatusCache(prev => ({ ...prev, [channel.id]: data.active }));
+            }
+          } catch (err) {
+            if (isSubscribed) {
+              setChannelStatusCache(prev => ({ ...prev, [channel.id]: false }));
+            }
+          }
+          
+          // Delay before next check
+          if (isSubscribed) {
+             timeoutId = setTimeout(() => testNext(index + 1), 600);
+          }
+        })();
+        
+        return currentCache;
+      });
+    };
+
+    // Give priority to rendering first
+    timeoutId = setTimeout(() => testNext(0), 1000);
+
+    return () => {
+      isSubscribed = false;
+      clearTimeout(timeoutId);
+    };
+  }, [displayedChannels]);
 
   // Poll server loading progress on startup
   useEffect(() => {
@@ -506,7 +574,7 @@ export default function App() {
             <button
               id="iptv-cinema-toggle-btn"
               onClick={() => setIsCinemaMode(!isCinemaMode)}
-              title={isCinemaMode ? "Salir de Modo Cine" : "Modo Cine"}
+              title={isCinemaMode ? "Salir de Modo Cine (C)" : "Modo Cine (C)"}
               className={`hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg border cursor-pointer transition-colors ${
                 isCinemaMode
                   ? "bg-cabildo-yellow hover:bg-[#e6c000] border-cabildo-yellow text-black font-bold"

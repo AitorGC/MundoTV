@@ -73,24 +73,36 @@ export default function VideoPlayer({ src, title, logo, isHttps, onMarkAsVlc }: 
           });
       });
 
+      let retryCount = 0;
+
       hls.on(Hls.Events.ERROR, (_, data) => {
         console.error("HLS error:", data);
         if (data.fatal) {
           switch (data.type) {
             case Hls.ErrorTypes.NETWORK_ERROR:
-              setError("Error de red. El servidor del canal no responde o bloquea la conexión.");
-              hls.startLoad();
+              if (retryCount < 3) {
+                retryCount++;
+                console.warn(`HLS Network error... auto-reconnecting (${retryCount}/3)`);
+                setError(`Conexión inestable... reintentando auto-conexión (${retryCount}/3)...`);
+                setIsLoading(true);
+                setTimeout(() => {
+                  if (hlsRef.current) hlsRef.current.startLoad();
+                }, 2000);
+              } else {
+                setError("Error de red persistente. El servidor del canal no responde o bloquea la conexión.");
+                setIsLoading(false);
+              }
               break;
             case Hls.ErrorTypes.MEDIA_ERROR:
-              setError("Error de medio. No se puede decodificar este formato de video.");
+              setError("Error de medio. No se puede decodificar este formato de video. Reintentando...");
               hls.recoverMediaError();
               break;
             default:
               setError("No se pudo iniciar la transmisión de este canal.");
               hls.destroy();
+              setIsLoading(false);
               break;
           }
-          setIsLoading(false);
         }
       });
     } else if (video.canPlayType("application/x-mpegURL") || video.canPlayType("application/vnd.apple.mpegurl")) {
@@ -166,6 +178,58 @@ export default function VideoPlayer({ src, title, logo, isHttps, onMarkAsVlc }: 
       (video as any).msRequestFullscreen(); // IE11
     }
   };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignorar eventos si el usuario está escribiendo en campos de texto
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+
+      const video = videoRef.current;
+      if (!video) return;
+
+      switch(e.key.toLowerCase()) {
+        case ' ': // Space = Play/Pause
+          e.preventDefault();
+          togglePlay();
+          break;
+        case 'm': // M = Mute
+          e.preventDefault();
+          toggleMute();
+          break;
+        case 'f': // F = Fullscreen
+          e.preventDefault();
+          toggleFullscreen();
+          break;
+        case 'arrowup': // Up = Volume Up
+          e.preventDefault();
+          setVolume(prev => {
+            const newVol = Math.min(1, prev + 0.05);
+            video.volume = newVol;
+            if(newVol > 0) {
+              setIsMuted(false);
+              video.muted = false;
+            }
+            return newVol;
+          });
+          break;
+        case 'arrowdown': // Down = Volume Down
+          e.preventDefault();
+          setVolume(prev => {
+            const newVol = Math.max(0, prev - 0.05);
+            video.volume = newVol;
+            if(newVol === 0) {
+              setIsMuted(true);
+              video.muted = true;
+            }
+            return newVol;
+          });
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isPlaying, isMuted, error]);
 
   return (
     <div id="iptv-player-container" className="relative group aspect-video bg-black rounded-2xl overflow-hidden shadow-2xl border border-neutral-800">
@@ -291,7 +355,7 @@ export default function VideoPlayer({ src, title, logo, isHttps, onMarkAsVlc }: 
               onClick={togglePlay}
               disabled={!!error}
               className="p-2 bg-cabildo-yellow hover:bg-[#e6c000] text-black rounded-full transition-transform hover:scale-105 active:scale-95 shadow-md disabled:bg-neutral-800 disabled:text-neutral-600 disabled:scale-100 cursor-pointer"
-              title={isPlaying ? "Pausar" : "Reproducir"}
+              title={isPlaying ? "Pausar (Espacio)" : "Reproducir (Espacio)"}
             >
               {isPlaying ? <Pause className="w-5 h-5 fill-current" /> : <Play className="w-5 h-5 fill-current ml-0.5" />}
             </button>
@@ -302,7 +366,7 @@ export default function VideoPlayer({ src, title, logo, isHttps, onMarkAsVlc }: 
                 id="iptv-mute-toggle-btn"
                 onClick={toggleMute}
                 className="text-neutral-400 hover:text-white transition-colors cursor-pointer"
-                title={isMuted ? "Quitar silencio" : "Silenciar"}
+                title={isMuted ? "Quitar silencio (M)" : "Silenciar (M)"}
               >
                 {isMuted || volume === 0 ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
               </button>
@@ -315,6 +379,7 @@ export default function VideoPlayer({ src, title, logo, isHttps, onMarkAsVlc }: 
                 value={isMuted ? 0 : volume}
                 onChange={handleVolumeChange}
                 className="w-20 accent-cabildo-yellow h-1 bg-neutral-800 rounded-lg cursor-pointer max-w-[0px] group-hover/volume:max-w-[80px] focus:max-w-[80px] transition-all duration-300"
+                title="Volumen (Flechas Arriba/Abajo)"
               />
             </div>
           </div>
@@ -323,7 +388,7 @@ export default function VideoPlayer({ src, title, logo, isHttps, onMarkAsVlc }: 
             id="iptv-fullscreen-btn"
             onClick={toggleFullscreen}
             className="p-1.5 text-neutral-400 hover:text-white transition-colors cursor-pointer"
-            title="Pantalla completa"
+            title="Pantalla completa (F)"
           >
             <Maximize2 className="w-5 h-5" />
           </button>
