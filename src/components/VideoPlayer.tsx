@@ -5,7 +5,7 @@
 
 import React, { useEffect, useRef, useState, ChangeEvent } from "react";
 import Hls from "hls.js";
-import { Play, Pause, Volume2, VolumeX, Maximize2, Tv, AlertCircle } from "lucide-react";
+import { Play, Pause, Volume2, VolumeX, Maximize2, Tv, AlertCircle, Languages, MessageSquare, Settings } from "lucide-react";
 
 interface VideoPlayerProps {
   src: string;
@@ -25,6 +25,17 @@ export default function VideoPlayer({ src, title, logo, isHttps, onMarkAsVlc }: 
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  // States for advanced HLS Audio and Subtitles tracks
+  const [audioTracks, setAudioTracks] = useState<{ id: number; name: string; lang?: string }[]>([]);
+  const [subtitleTracks, setSubtitleTracks] = useState<{ id: number; name: string; lang?: string }[]>([]);
+  const [currentAudioTrack, setCurrentAudioTrack] = useState<number>(-1);
+  const [currentSubtitleTrack, setCurrentSubtitleTrack] = useState<number>(-1);
+
+  // States for manual HLS quality/resolution levels (Improvement)
+  const [qualityLevels, setQualityLevels] = useState<{ id: number; name: string; height?: number; bitrate?: number }[]>([]);
+  const [currentQuality, setCurrentQuality] = useState<number>(-1); // -1 is Auto
+  const [activeAutoHeight, setActiveAutoHeight] = useState<number | null>(null);
+
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
@@ -33,6 +44,13 @@ export default function VideoPlayer({ src, title, logo, isHttps, onMarkAsVlc }: 
     setError(null);
     setIsLoading(true);
     setIsPlaying(false);
+    setAudioTracks([]);
+    setSubtitleTracks([]);
+    setCurrentAudioTrack(-1);
+    setCurrentSubtitleTrack(-1);
+    setQualityLevels([]);
+    setCurrentQuality(-1);
+    setActiveAutoHeight(null);
 
     // Clean up previous HLS instance
     if (hlsRef.current) {
@@ -65,12 +83,61 @@ export default function VideoPlayer({ src, title, logo, isHttps, onMarkAsVlc }: 
 
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
         setIsLoading(false);
+        if (hls.levels && hls.levels.length > 0) {
+          const list = hls.levels.map((level: any, idx: number) => {
+            const height = level.height;
+            return {
+              id: idx,
+              name: height ? `${height}p` : `Nivel ${idx + 1}`,
+              height: height,
+              bitrate: level.bitrate
+            };
+          });
+          // Sort quality levels from highest definition to lowest definition (e.g. 1080p, 720p, 480p...)
+          list.sort((a, b) => (b.height || 0) - (a.height || 0));
+          setQualityLevels(list);
+          setCurrentQuality(hls.currentLevel);
+        } else {
+          setQualityLevels([]);
+          setCurrentQuality(-1);
+        }
+
         video.play()
           .then(() => setIsPlaying(true))
           .catch((err) => {
             console.log("Autoplay blocked by browser policy, waiting for user click:", err);
             setIsPlaying(false);
           });
+      });
+
+      hls.on(Hls.Events.LEVEL_SWITCHED, (_, data) => {
+        if (hls.levels && hls.levels[data.level]) {
+          setActiveAutoHeight(hls.levels[data.level].height);
+        }
+      });
+
+      hls.on(Hls.Events.AUDIO_TRACKS_UPDATED, (_, data) => {
+        if (data && data.audioTracks) {
+          const list = data.audioTracks.map((item: any) => ({
+            id: item.id,
+            name: item.name || item.lang || `Audio ${item.id}`,
+            lang: item.lang
+          }));
+          setAudioTracks(list);
+          setCurrentAudioTrack(hls.audioTrack);
+        }
+      });
+
+      hls.on(Hls.Events.SUBTITLE_TRACKS_UPDATED, (_, data) => {
+        if (data && data.subtitleTracks) {
+          const list = data.subtitleTracks.map((item: any) => ({
+            id: item.id,
+            name: item.name || item.lang || `Sub ${item.id}`,
+            lang: item.lang
+          }));
+          setSubtitleTracks(list);
+          setCurrentSubtitleTrack(hls.subtitleTrack);
+        }
       });
 
       let retryCount = 0;
@@ -176,6 +243,27 @@ export default function VideoPlayer({ src, title, logo, isHttps, onMarkAsVlc }: 
       (video as any).webkitRequestFullscreen(); // Safari
     } else if ((video as any).msRequestFullscreen) {
       (video as any).msRequestFullscreen(); // IE11
+    }
+  };
+
+  const handleSelectAudioTrack = (id: number) => {
+    if (hlsRef.current) {
+      hlsRef.current.audioTrack = id;
+      setCurrentAudioTrack(id);
+    }
+  };
+
+  const handleSelectSubtitleTrack = (id: number) => {
+    if (hlsRef.current) {
+      hlsRef.current.subtitleTrack = id;
+      setCurrentSubtitleTrack(id);
+    }
+  };
+
+  const handleSelectQuality = (id: number) => {
+    if (hlsRef.current) {
+      hlsRef.current.currentLevel = id;
+      setCurrentQuality(id);
     }
   };
 
@@ -384,14 +472,145 @@ export default function VideoPlayer({ src, title, logo, isHttps, onMarkAsVlc }: 
             </div>
           </div>
 
-          <button
-            id="iptv-fullscreen-btn"
-            onClick={toggleFullscreen}
-            className="p-1.5 text-neutral-400 hover:text-white transition-colors cursor-pointer"
-            title="Pantalla completa (F)"
-          >
-            <Maximize2 className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-3">
+            {/* Audio Tracks Dropdown */}
+            {audioTracks.length > 1 && (
+              <div className="relative group/audio">
+                <button
+                  type="button"
+                  className="p-1.5 text-neutral-400 hover:text-white transition-colors flex items-center gap-1.5 text-xs cursor-pointer bg-neutral-900/60 rounded-lg hover:bg-neutral-800"
+                  title="Pistas de Audio"
+                >
+                  <Languages className="w-4 h-4 text-cabildo-yellow" />
+                  <span className="text-[10px] font-bold uppercase tracking-wider">
+                    {audioTracks.find(t => t.id === currentAudioTrack)?.lang?.toUpperCase() || "AUDIO"}
+                  </span>
+                </button>
+                <div className="absolute bottom-full right-0 mb-2 invisible group-hover/audio:visible opacity-0 group-hover/audio:opacity-100 transition-all duration-200 bg-neutral-950 border border-neutral-800 rounded-xl p-2 shadow-2xl min-w-[150px] z-50 flex flex-col gap-1">
+                  <p className="text-[9px] text-zinc-500 font-bold tracking-wider px-2 py-1 border-b border-neutral-800 mb-1 uppercase">Idioma de Audio</p>
+                  <div className="max-h-48 overflow-y-auto flex flex-col gap-0.5">
+                    {audioTracks.map((t) => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => handleSelectAudioTrack(t.id)}
+                        className={`w-full text-left px-2.5 py-1.5 text-[11px] rounded-lg transition-colors block ${
+                          t.id === currentAudioTrack
+                            ? "bg-cabildo-yellow/10 text-cabildo-yellow font-extrabold border border-cabildo-yellow/20"
+                            : "text-zinc-300 hover:bg-neutral-900 border border-transparent"
+                        }`}
+                      >
+                        {t.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Subtitles Tracks Dropdown */}
+            {subtitleTracks.length > 0 && (
+              <div className="relative group/subs">
+                <button
+                  type="button"
+                  className="p-1.5 text-neutral-400 hover:text-white transition-colors flex items-center gap-1.5 text-xs cursor-pointer bg-neutral-900/60 rounded-lg hover:bg-neutral-800"
+                  title="Subtítulos HLS"
+                >
+                  <MessageSquare className={`w-4 h-4 ${currentSubtitleTrack !== -1 ? "text-cabildo-yellow" : ""}`} />
+                  <span className="text-[10px] font-bold uppercase tracking-wider">
+                    {currentSubtitleTrack === -1 ? "Sub" : subtitleTracks.find(t => t.id === currentSubtitleTrack)?.lang?.toUpperCase() || "CC"}
+                  </span>
+                </button>
+                <div className="absolute bottom-full right-0 mb-2 invisible group-hover/subs:visible opacity-0 group-hover/subs:opacity-100 transition-all duration-200 bg-neutral-950 border border-neutral-800 rounded-xl p-2 shadow-2xl min-w-[150px] z-50 flex flex-col gap-1">
+                  <p className="text-[9px] text-zinc-500 font-bold tracking-wider px-2 py-1 border-b border-neutral-800 mb-1 uppercase">Subtítulos HLS</p>
+                  <div className="max-h-48 overflow-y-auto flex flex-col gap-0.5">
+                    <button
+                      type="button"
+                      onClick={() => handleSelectSubtitleTrack(-1)}
+                      className={`w-full text-left px-2.5 py-1.5 text-[11px] rounded-lg transition-colors block ${
+                        currentSubtitleTrack === -1
+                          ? "bg-cabildo-yellow/10 text-cabildo-yellow font-extrabold border border-cabildo-yellow/20"
+                          : "text-zinc-300 hover:bg-neutral-900 border border-transparent"
+                      }`}
+                    >
+                      Desactivados
+                    </button>
+                    {subtitleTracks.map((t) => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => handleSelectSubtitleTrack(t.id)}
+                        className={`w-full text-left px-2.5 py-1.5 text-[11px] rounded-lg transition-colors block ${
+                          t.id === currentSubtitleTrack
+                            ? "bg-cabildo-yellow/10 text-cabildo-yellow font-extrabold border border-cabildo-yellow/20"
+                            : "text-zinc-300 hover:bg-neutral-900 border border-transparent"
+                        }`}
+                      >
+                        {t.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Quality/Resolution Dropdown */}
+            {qualityLevels.length > 0 && (
+              <div className="relative group/quality">
+                <button
+                  type="button"
+                  className="p-1.5 text-neutral-400 hover:text-white transition-colors flex items-center gap-1.5 text-xs cursor-pointer bg-neutral-900/60 rounded-lg hover:bg-neutral-800"
+                  title="Calidad / Resolución"
+                >
+                  <Settings className="w-4 h-4 text-cabildo-yellow group-hover/quality:rotate-45 transition-transform duration-300" />
+                  <span className="text-[10px] font-bold uppercase tracking-wider">
+                    {currentQuality === -1 
+                      ? (activeAutoHeight ? `AUTO (${activeAutoHeight}p)` : "AUTO") 
+                      : qualityLevels.find(q => q.id === currentQuality)?.name || "CALIDAD"}
+                  </span>
+                </button>
+                <div className="absolute bottom-full right-0 mb-2 invisible group-hover/quality:visible opacity-0 group-hover/quality:opacity-100 transition-all duration-200 bg-neutral-950 border border-neutral-800 rounded-xl p-2 shadow-2xl min-w-[150px] z-50 flex flex-col gap-1">
+                  <p className="text-[9px] text-zinc-500 font-bold tracking-wider px-2 py-1 border-b border-neutral-800 mb-1 uppercase">Resolución</p>
+                  <div className="max-h-48 overflow-y-auto flex flex-col gap-0.5 font-secondary">
+                    <button
+                      type="button"
+                      onClick={() => handleSelectQuality(-1)}
+                      className={`w-full text-left px-2.5 py-1.5 text-[11px] rounded-lg transition-colors block ${
+                        currentQuality === -1
+                          ? "bg-cabildo-yellow/10 text-cabildo-yellow font-extrabold border border-cabildo-yellow/20"
+                          : "text-zinc-300 hover:bg-neutral-900 border border-transparent"
+                      }`}
+                    >
+                      Automático (Auto)
+                    </button>
+                    {qualityLevels.map((q) => (
+                      <button
+                        key={q.id}
+                        type="button"
+                        onClick={() => handleSelectQuality(q.id)}
+                        className={`w-full text-left px-2.5 py-1.5 text-[11px] rounded-lg transition-colors block ${
+                          q.id === currentQuality
+                            ? "bg-cabildo-yellow/10 text-cabildo-yellow font-extrabold border border-cabildo-yellow/20"
+                            : "text-zinc-350 hover:bg-neutral-900 border border-transparent"
+                        }`}
+                      >
+                        {q.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <button
+              id="iptv-fullscreen-btn"
+              onClick={toggleFullscreen}
+              className="p-1.5 text-neutral-400 hover:text-white transition-colors cursor-pointer"
+              title="Pantalla completa (F)"
+            >
+              <Maximize2 className="w-5 h-5" />
+            </button>
+          </div>
         </div>
       </div>
     </div>

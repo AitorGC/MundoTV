@@ -28,10 +28,16 @@ import {
   Moon,
   MonitorPlay,
   Maximize,
-  Minimize
+  Minimize,
+  Clock,
+  Plus,
+  Trash2,
+  Upload
 } from "lucide-react";
 import { IPTVChannel, FiltersResponse, PaginatedChannels } from "./types";
 import VideoPlayer from "./components/VideoPlayer";
+import EPGGuide from "./components/EPGGuide";
+import { getChannelEPG, parseM3UPlaylist, EPGProgram } from "./utils";
 
 export default function App() {
   // App initialization states
@@ -94,8 +100,27 @@ export default function App() {
   // UI status alerts
   const [copiedUrl, setCopiedUrl] = useState(false);
 
-  // Show list tab in sidebar
-  const [activeTab, setActiveTab] = useState<"all" | "favorites" | "vlc">("all");
+  // Show list tab in sidebar (Todos vs Favoritos vs PC/VLC vs Listas M3U)
+  const [activeTab, setActiveTab] = useState<"all" | "favorites" | "vlc" | "custom">("all");
+
+  // User's custom channels persisted via localStorage
+  const [customChannels, setCustomChannels] = useState<IPTVChannel[]>(() => {
+    try {
+      const saved = localStorage.getItem("iptv_custom_channels_v1");
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  // Sync custom channels changes with local storage
+  useEffect(() => {
+    try {
+      localStorage.setItem("iptv_custom_channels_v1", JSON.stringify(customChannels));
+    } catch (e) {
+      console.error("Error al persistir canales personalizados:", e);
+    }
+  }, [customChannels]);
 
   // User's favorites list persisted via localStorage
   const [favorites, setFavorites] = useState<IPTVChannel[]>(() => {
@@ -127,6 +152,15 @@ export default function App() {
       return [];
     }
   });
+
+  // States for Custom M3U / Custom Channels creation forms (Improvement 2)
+  const [m3uText, setM3uText] = useState("");
+  const [showImportForm, setShowImportForm] = useState(false);
+  const [showManualForm, setShowManualForm] = useState(false);
+  const [manualName, setManualName] = useState("");
+  const [manualUrl, setManualUrl] = useState("");
+  const [manualLogo, setManualLogo] = useState("");
+  const [manualCategory, setManualCategory] = useState("");
 
   const [isCinemaMode, setIsCinemaMode] = useState(false);
   const [checkingChannel, setCheckingChannel] = useState<string | null>(null);
@@ -263,28 +297,35 @@ export default function App() {
 
   const filteredFavorites = computeClientSideList(favorites);
   const filteredVlc = computeClientSideList(vlcChannels);
+  const filteredCustom = computeClientSideList(customChannels);
   
   const itemsPerPage = 50;
   const currentFavPage = Math.min(page, Math.ceil(filteredFavorites.length / itemsPerPage) || 1) || 1;
   const currentVlcPage = Math.min(page, Math.ceil(filteredVlc.length / itemsPerPage) || 1) || 1;
+  const currentCustomPageStored = Math.min(page, Math.ceil(filteredCustom.length / itemsPerPage) || 1) || 1;
 
   const paginatedFavs = filteredFavorites.slice(0, currentFavPage * itemsPerPage);
   const paginatedVlc = filteredVlc.slice(0, currentVlcPage * itemsPerPage);
+  const paginatedCustom = filteredCustom.slice(0, currentCustomPageStored * itemsPerPage);
 
   const displayedChannels = activeTab === "favorites" ? paginatedFavs 
                           : activeTab === "vlc" ? paginatedVlc 
+                          : activeTab === "custom" ? paginatedCustom
                           : channels.filter(c => !isVlc(c.id));
                           
   const activeTotalResults = activeTab === "favorites" ? filteredFavorites.length 
                            : activeTab === "vlc" ? filteredVlc.length 
+                           : activeTab === "custom" ? filteredCustom.length
                            : totalResults;
                            
   const activeTotalPages = activeTab === "favorites" ? (Math.ceil(filteredFavorites.length / itemsPerPage) || 1)
                          : activeTab === "vlc" ? (Math.ceil(filteredVlc.length / itemsPerPage) || 1)
+                         : activeTab === "custom" ? (Math.ceil(filteredCustom.length / itemsPerPage) || 1)
                          : totalPages;
                          
   const activePage = activeTab === "favorites" ? currentFavPage 
                    : activeTab === "vlc" ? currentVlcPage 
+                   : activeTab === "custom" ? currentCustomPageStored
                    : page;
 
   // Testeo Preventivo en Segundo Plano (Background Check)
@@ -614,13 +655,22 @@ export default function App() {
             
             {/* The active player wrapper */}
             {activeChannel ? (
-              <VideoPlayer 
-                src={activeChannel.streamUrl || ""} 
-                title={activeChannel.name}
-                logo={activeChannel.logo}
-                isHttps={activeChannel.isHttps}
-                onMarkAsVlc={() => markAsVlc(activeChannel)}
-              />
+              <>
+                <VideoPlayer 
+                  src={activeChannel.streamUrl || ""} 
+                  title={activeChannel.name}
+                  logo={activeChannel.logo}
+                  isHttps={activeChannel.isHttps}
+                  onMarkAsVlc={() => markAsVlc(activeChannel)}
+                />
+                
+                <EPGGuide
+                  channelId={activeChannel.id}
+                  channelName={activeChannel.name}
+                  category={activeChannel.categories[0] || ""}
+                  darkMode={darkMode}
+                />
+              </>
             ) : (
               <div className={`aspect-video rounded-2xl border flex flex-col items-center justify-center p-8 text-center shadow-lg transition-colors ${
                 darkMode
@@ -1130,7 +1180,9 @@ export default function App() {
                     setActiveTab("favorites");
                     setPage(1);
                   }}
-                  className={`flex-1 py-3 px-2 md:px-4 text-[10px] md:text-[11px] text-center font-extrabold tracking-tight font-sans transition-all flex items-center justify-center gap-1 md:gap-2 cursor-pointer ${
+                  className={`flex-1 py-3 px-2 md:px-4 text-[10px] md:text-[11px] text-center font-extrabold tracking-tight font-sans transition-all border-r flex items-center justify-center gap-1 md:gap-2 cursor-pointer ${
+                    darkMode ? "border-zinc-900/60" : "border-slate-200/60"
+                  } ${
                     activeTab === "favorites" 
                       ? (darkMode 
                           ? "bg-zinc-900/40 text-cabildo-yellow font-extrabold border-b-2 border-cabildo-yellow" 
@@ -1140,6 +1192,22 @@ export default function App() {
                 >
                   <Heart className={`w-3.5 h-3.5 text-rose-500 ${favorites.length > 0 ? "fill-current text-rose-500" : ""}`} />
                   <span>FAVS</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setActiveTab("custom");
+                    setPage(1);
+                  }}
+                  className={`flex-1 py-3 px-2 md:px-4 text-[10px] md:text-[11px] text-center font-extrabold tracking-tight font-sans transition-all flex items-center justify-center gap-1 md:gap-2 cursor-pointer ${
+                    activeTab === "custom" 
+                      ? (darkMode 
+                          ? "bg-zinc-900/40 text-cabildo-yellow font-extrabold border-b-2 border-cabildo-yellow" 
+                          : "bg-white text-[#004993] font-black border-b-2 border-cabildo-yellow") 
+                      : (darkMode ? "hover:bg-zinc-900/40 hover:text-zinc-200" : "hover:bg-slate-100 hover:text-black")
+                  }`}
+                >
+                  <Upload className="w-3.5 h-3.5 text-emerald-500" />
+                  <span>M3U</span>
                 </button>
               </div>
 
@@ -1151,6 +1219,7 @@ export default function App() {
                 }`}>
                   {activeTab === "favorites" ? "MIS FAVORITOS GUARDADOS" 
                    : activeTab === "vlc" ? "CANALES SOLO PARA PC" 
+                   : activeTab === "custom" ? "LISTAS Y CANALES M3U"
                    : "CANALES EN LÍNEA"} ({activeTotalResults.toLocaleString()} COINCIDENCIAS)
                 </span>
                 {activeTab === "all" && isLoadingChannels && (
@@ -1170,7 +1239,209 @@ export default function App() {
                   }
                 }}
               >
-                {displayedChannels.length === 0 ? (
+                {/* Custom Content Management Tools (Improvement 2) */}
+                {activeTab === "custom" && (
+                  <div className={`p-2.5 mb-2 rounded-xl border flex flex-col gap-2.5 transition-colors ${
+                    darkMode ? "bg-zinc-900/40 border-zinc-800" : "bg-slate-100/75 border-slate-200"
+                  }`}>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => {
+                          setShowImportForm(!showImportForm);
+                          setShowManualForm(false);
+                        }}
+                        className={`flex-1 py-1.5 px-2 rounded-lg text-[11px] font-bold font-secondary flex items-center justify-center gap-1.5 shadow-xs transition-all cursor-pointer border ${
+                          showImportForm
+                            ? "bg-emerald-600 text-white border-transparent font-extrabold"
+                            : darkMode
+                            ? "bg-zinc-900 hover:bg-zinc-800 border-zinc-800 text-zinc-300"
+                            : "bg-white hover:bg-slate-50 border-slate-200 text-slate-700"
+                        }`}
+                      >
+                        <Upload className="w-3.5 h-3.5" />
+                        <span>Cargar M3U</span>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          setShowManualForm(!showManualForm);
+                          setShowImportForm(false);
+                        }}
+                        className={`flex-1 py-1.5 px-2 rounded-lg text-[11px] font-bold font-secondary flex items-center justify-center gap-1.5 shadow-xs transition-all cursor-pointer border ${
+                          showManualForm
+                            ? "bg-cabildo-yellow text-zinc-950 border-transparent font-extrabold"
+                            : darkMode
+                            ? "bg-zinc-900 hover:bg-zinc-800 border-zinc-800 text-zinc-300"
+                            : "bg-white hover:bg-slate-50 border-slate-200 text-slate-700"
+                        }`}
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Canal Manual</span>
+                      </button>
+                    </div>
+
+                    {/* Import M3U Form */}
+                    {showImportForm && (
+                      <div className="flex flex-col gap-2 pt-1 font-secondary">
+                        <textarea
+                          value={m3uText}
+                          onChange={(e) => setM3uText(e.target.value)}
+                          placeholder={"#EXTM3U\n#EXTINF:-1 tvg-logo=\"logo_url\" group-title=\"Noticias\",Canal 1\nhttps://ejemplo.com/stream.m3u8"}
+                          rows={4}
+                          className={`w-full p-2 text-[10px] font-mono rounded-lg border outline-none transition-colors resize-none ${
+                            darkMode 
+                              ? "bg-zinc-950 border-zinc-800 text-zinc-300 focus:border-zinc-750" 
+                              : "bg-white border-slate-200 text-slate-700 focus:border-slate-300"
+                          }`}
+                        />
+                        <div className="flex items-center justify-between gap-2">
+                          <span className={`text-[9px] leading-normal ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>
+                            Pega código M3U completo para procesarlo.
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!m3uText.trim()) return;
+                              const imported = parseM3UPlaylist(m3uText);
+                              if (imported.length > 0) {
+                                setCustomChannels(prev => [...imported, ...prev]);
+                                setM3uText("");
+                                setShowImportForm(false);
+                              } else {
+                                alert("No se detectaron formatos de trasmisión válidos en M3U. Asegúrese de que existan URLs correctas (http/https).");
+                              }
+                            }}
+                            className="bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-[10px] px-3 py-1 rounded-md transition-colors cursor-pointer"
+                          >
+                            Importar {m3uText.split("\n").filter(l => l.trim().startsWith("http")).length || ""} canales
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Manual Channel Form */}
+                    {showManualForm && (
+                      <div className="flex flex-col gap-2 pt-1 font-secondary">
+                        <div className="flex flex-col gap-1">
+                          <label className={`text-[9px] font-bold uppercase tracking-wider ${darkMode ? "text-zinc-500" : "text-slate-500"}`}>
+                            Nombre del Canal *
+                          </label>
+                          <input
+                            type="text"
+                            value={manualName}
+                            onChange={(e) => setManualName(e.target.value)}
+                            placeholder="Ej. Canal Deportivo"
+                            className={`w-full px-2 py-1.5 text-xs rounded-lg border outline-none transition-colors ${
+                              darkMode ? "bg-zinc-950 border-zinc-800 text-zinc-300 focus:border-zinc-700" : "bg-white border-slate-200 text-slate-700 focus:border-slate-300"
+                            }`}
+                          />
+                        </div>
+
+                        <div className="flex flex-col gap-1">
+                          <label className={`text-[9px] font-bold uppercase tracking-wider ${darkMode ? "text-zinc-500" : "text-slate-500"}`}>
+                            URL de Transmisión (HLS/.m3u8) *
+                          </label>
+                          <input
+                            type="text"
+                            value={manualUrl}
+                            onChange={(e) => setManualUrl(e.target.value)}
+                            placeholder="https://servidor.com/live.m3u8"
+                            className={`w-full px-2 py-1.5 text-xs rounded-lg border outline-none transition-colors ${
+                              darkMode ? "bg-zinc-950 border-zinc-800 text-zinc-300 focus:border-zinc-700" : "bg-white border-slate-200 text-slate-700"
+                            }`}
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="flex flex-col gap-1">
+                            <label className={`text-[9px] font-bold uppercase tracking-wider ${darkMode ? "text-zinc-500" : "text-slate-500"}`}>
+                              Logotipo URL
+                            </label>
+                            <input
+                              type="text"
+                              value={manualLogo}
+                              onChange={(e) => setManualLogo(e.target.value)}
+                              placeholder="https://enlace.com/logo.png"
+                              className={`w-full px-2 py-1.5 text-xs rounded-lg border outline-none transition-colors ${
+                                darkMode ? "bg-zinc-950 border-zinc-800 text-zinc-300 focus:border-zinc-700" : "bg-white border-slate-200 text-slate-700"
+                              }`}
+                            />
+                          </div>
+
+                          <div className="flex flex-col gap-1">
+                            <label className={`text-[9px] font-bold uppercase tracking-wider ${darkMode ? "text-zinc-500" : "text-slate-500"}`}>
+                              Categoría / Grupo
+                            </label>
+                            <input
+                              type="text"
+                              value={manualCategory}
+                              onChange={(e) => setManualCategory(e.target.value)}
+                              placeholder="Ej. Deportes"
+                              className={`w-full px-2 py-1.5 text-xs rounded-lg border outline-none transition-colors ${
+                                darkMode ? "bg-zinc-950 border-zinc-800 text-zinc-300 focus:border-zinc-700" : "bg-white border-slate-200 text-slate-700"
+                              }`}
+                            />
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!manualName.trim() || !manualUrl.trim()) return;
+                            const id = `custom_${Math.random().toString(36).substr(2, 9)}`;
+                            const newChan: IPTVChannel = {
+                              id,
+                              name: manualName.trim(),
+                              logo: manualLogo.trim() || null,
+                              countries: ["M3U"],
+                              languages: ["es"],
+                              categories: [(manualCategory.trim() || "Personalizado").toLowerCase().replace(/\s+/g, "_")],
+                              streamUrl: manualUrl.trim(),
+                              isHttps: manualUrl.trim().startsWith("https://"),
+                              status: "online",
+                              countryNames: ["Personalizado"],
+                              languageNames: ["Español"],
+                              categoryNames: [manualCategory.trim() || "Personalizado"]
+                            };
+                            setCustomChannels(prev => [newChan, ...prev]);
+                            setManualName("");
+                            setManualUrl("");
+                            setManualLogo("");
+                            setManualCategory("");
+                            setShowManualForm(false);
+                          }}
+                          disabled={!manualName.trim() || !manualUrl.trim()}
+                          className="bg-cabildo-yellow hover:bg-yellow-400 disabled:bg-neutral-800 disabled:text-zinc-500 text-zinc-950 font-extrabold text-[10px] py-1.5 rounded-lg transition-colors cursor-pointer"
+                        >
+                          Guardar Canal
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Clear custom channels */}
+                    {customChannels.length > 0 && (
+                      <div className="flex items-center justify-between border-t border-dashed border-neutral-800/15 dark:border-neutral-800/30 pt-2 bg-transparent">
+                        <span className={`text-[9px] font-bold uppercase ${darkMode ? "text-zinc-500" : "text-slate-400"}`}>
+                          Tienes {customChannels.length} canales guardados
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if(window.confirm("¿Estás seguro de que quieres borrar todos tus canales personalizados cargados?")) {
+                              setCustomChannels([]);
+                            }
+                          }}
+                          className="text-[9px] font-extrabold text-red-500 hover:text-red-400 flex items-center gap-1 cursor-pointer hover:underline uppercase"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>Limpiar Todo</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                 {displayedChannels.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-20 px-4 text-center">
                     {activeTab === "favorites" ? (
                       <>
@@ -1190,6 +1461,16 @@ export default function App() {
                         }`}>Agrega canales desde el reproductor</span>
                         <span className="text-zinc-500 text-[10px] mt-1 pr-4 pl-4 max-w-xs font-secondary">
                           Aquellos canales bloqueados en la web pueden ser enviados aquí para abrirlos en PC con clics fáciles.
+                        </span>
+                      </>
+                    ) : activeTab === "custom" ? (
+                      <>
+                        <Upload className="w-10 h-10 text-zinc-650 mb-2" />
+                        <span className={`font-semibold font-secondary text-xs ${
+                          darkMode ? "text-zinc-300" : "text-slate-700"
+                        }`}>No has cargado canales M3U</span>
+                        <span className="text-zinc-500 text-[10px] mt-1 pr-4 pl-4 max-w-xs font-secondary">
+                          Usa los botones superiores para pegar una lista M3U o registrar cualquier transmisión libre de tu agrado.
                         </span>
                       </>
                     ) : (
@@ -1271,6 +1552,25 @@ export default function App() {
 
                         {/* Actions container */}
                         <div className="flex items-center gap-1.5 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                          {/* Trash button for custom channels */}
+                          {chan.id.startsWith("custom_") && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (window.confirm(`¿Quieres borrar el canal "${chan.name}" de tus personalizados?`)) {
+                                  setCustomChannels(prev => prev.filter(c => c.id !== chan.id));
+                                  if (activeChannel?.id === chan.id) {
+                                    setActiveChannel(null);
+                                  }
+                                }
+                              }}
+                              className={`p-1.5 border rounded-lg transition-colors cursor-pointer border-transparent text-red-500 hover:bg-red-500/10 hover:border-red-500/20`}
+                              title="Borrar canal de la lista"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+
                           {/* Heart toggle directly in list */}
                           <button
                             onClick={() => toggleFavorite(chan)}

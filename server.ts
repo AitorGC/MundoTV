@@ -5,6 +5,7 @@
 
 import express from "express";
 import path from "path";
+import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import { IPTVChannel, FiltersResponse, PaginatedChannels } from "./src/types";
 
@@ -508,6 +509,35 @@ let cachedFilters: FiltersResponse = {
 
 // Start background fetching of the massive iptv-org catalogs
 async function loadIPTVData() {
+  const cacheDir = path.join(process.cwd(), ".data");
+  const cacheFilePath = path.join(cacheDir, "iptv_cache.json");
+
+  if (fs.existsSync(cacheFilePath)) {
+    try {
+      const stats = fs.statSync(cacheFilePath);
+      const cacheAgeMs = Date.now() - stats.mtimeMs;
+      const maxAgeMs = 24 * 60 * 60 * 1000; // 24 hours
+      if (cacheAgeMs < maxAgeMs) {
+        console.log("[IPTV Loader] Encontrado caché local reciente. Cargando...");
+        loadingProgress = "Cargando catálogo desde caché local rápido...";
+        const cacheData = JSON.parse(fs.readFileSync(cacheFilePath, "utf8"));
+        if (cacheData.iptvChannels && cacheData.cachedFilters && cacheData.regionsList) {
+          iptvChannels = cacheData.iptvChannels;
+          cachedFilters = cacheData.cachedFilters;
+          regionsList = cacheData.regionsList;
+          isDataLoaded = true;
+          loadingProgress = "Listo";
+          console.log(`[IPTV Loader] ¡Cargados ${iptvChannels.length} canales instantáneamente desde caché local de disco!`);
+          return;
+        }
+      } else {
+        console.log("[IPTV Loader] El caché local ha expirado (>24h). Recargando de iptv-org...");
+      }
+    } catch (cacheErr) {
+      console.warn("[IPTV Loader] Error al leer caché local, procediendo con descarga fresca...", cacheErr);
+    }
+  }
+
   console.log("[IPTV Loader] Iniciando descarga de catálogos públicos de iptv-org...");
   try {
     loadingProgress = "Descargando streams en línea de iptv-org...";
@@ -782,6 +812,21 @@ async function loadIPTVData() {
     isDataLoaded = true;
     loadingProgress = "Listo";
     console.log(`[IPTV Loader] ¡Carga completada totalmente! Filtros en español listos.`);
+
+    // Guardar en caché local para arranques rápidos en el futuro
+    try {
+      if (!fs.existsSync(cacheDir)) {
+        fs.mkdirSync(cacheDir, { recursive: true });
+      }
+      fs.writeFileSync(cacheFilePath, JSON.stringify({
+        iptvChannels,
+        cachedFilters,
+        regionsList
+      }), "utf8");
+      console.log("[IPTV Loader] Catálogo de canales guardado exitosamente en caché local (.data/iptv_cache.json)");
+    } catch (writeErr) {
+      console.error("[IPTV Loader] Error al escribir en caché local:", writeErr);
+    }
 
   } catch (err: any) {
     console.error("[IPTV Loader] Error al cargar listas de iptv-org:", err);
