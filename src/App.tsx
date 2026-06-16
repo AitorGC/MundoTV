@@ -38,6 +38,7 @@ import { IPTVChannel, FiltersResponse, PaginatedChannels } from "./types";
 import VideoPlayer from "./components/VideoPlayer";
 import EPGGuide from "./components/EPGGuide";
 import { getChannelEPG, parseM3UPlaylist, EPGProgram } from "./utils";
+import { motion } from "motion/react";
 
 export default function App() {
   // App initialization states
@@ -1490,8 +1491,11 @@ export default function App() {
                     const isActive = activeChannel?.id === chan.id;
                     const isChanFav = isFavorite(chan.id);
                     return (
-                      <div
+                      <motion.div
                         key={chan.id}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.2 }}
                         onClick={() => handleSelectChannel(chan)}
                         className={`group/item flex items-center justify-between p-2 rounded-xl transition-all cursor-pointer text-left border ${
                           isActive 
@@ -1610,7 +1614,7 @@ export default function App() {
                             </button>
                           )}
                         </div>
-                      </div>
+                      </motion.div>
                     );
                   })
                 )}
