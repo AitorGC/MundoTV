@@ -143,7 +143,7 @@ export default function VideoPlayer({ src, title, logo, isHttps, onMarkAsVlc }: 
       let retryCount = 0;
 
       hls.on(Hls.Events.ERROR, (_, data) => {
-        console.error("HLS error:", data);
+        console.warn("HLS stream event:", data.type, data.details);
         if (data.fatal) {
           switch (data.type) {
             case Hls.ErrorTypes.NETWORK_ERROR:
@@ -208,7 +208,7 @@ export default function VideoPlayer({ src, title, logo, isHttps, onMarkAsVlc }: 
     } else {
       video.play()
         .then(() => setIsPlaying(true))
-        .catch((err) => console.error("Playback error:", err));
+        .catch((err) => console.warn("Playback prevented:", err));
     }
   };
 

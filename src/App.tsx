@@ -119,7 +119,7 @@ export default function App() {
     try {
       localStorage.setItem("iptv_custom_channels_v1", JSON.stringify(customChannels));
     } catch (e) {
-      console.error("Error al persistir canales personalizados:", e);
+      console.warn("Error al persistir canales personalizados:", e);
     }
   }, [customChannels]);
 
@@ -129,7 +129,7 @@ export default function App() {
       const saved = localStorage.getItem("iptv_favorites_channels_v1");
       return saved ? JSON.parse(saved) : [];
     } catch (e) {
-      console.error("Error al cargar favoritos de localStorage:", e);
+      console.warn("Error al cargar favoritos de localStorage:", e);
       return [];
     }
   });
@@ -190,7 +190,7 @@ export default function App() {
       localStorage.setItem("iptv_vlc_channels_v1", JSON.stringify(vlcChannels));
       localStorage.setItem("iptv_recent_channels_v1", JSON.stringify(recentChannels));
     } catch (e) {
-      console.error("Error al guardar en localStorage:", e);
+      console.warn("Error al guardar en localStorage:", e);
     }
   }, [favorites, vlcChannels, recentChannels]);
 
@@ -397,7 +397,7 @@ export default function App() {
           }
         }
       } catch (err) {
-        console.error("Error al consultar estado del servidor:", err);
+        console.warn("Error al consultar estado del servidor:", err);
       }
     };
 
@@ -428,7 +428,7 @@ export default function App() {
           setAllFilters(data);
         }
       } catch (err) {
-        console.error("Error al obtener metadatos de filtros:", err);
+        console.warn("Error al obtener metadatos de filtros:", err);
       }
     };
 
@@ -469,7 +469,7 @@ export default function App() {
         }
       }
     } catch (err) {
-      console.error("Error al cargar canales:", err);
+      console.warn("Error al cargar canales:", err);
     } finally {
       setIsLoadingChannels(false);
     }
