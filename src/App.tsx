@@ -554,12 +554,12 @@ export default function App() {
       }`} />
 
       {/* Primary Header */}
-      <header className={`sticky top-0 z-40 backdrop-blur-xl border-b px-4 py-3.5 sm:px-6 transition-colors ${
+      <header className={`sticky top-0 z-40 backdrop-blur-xl border-b px-4 py-3.5 sm:px-6 lg:px-8 transition-colors ${
         darkMode 
           ? "bg-black/80 border-zinc-900/80" 
           : "bg-white/90 border-slate-200/80 shadow-xs"
       }`}>
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div className="w-full mx-auto flex flex-col md:flex-row md:items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className={`p-2.5 rounded-xl shadow-inner transition-colors border ${
               darkMode 
@@ -648,7 +648,7 @@ export default function App() {
       </header>
 
       {/* Main body of App */}
-      <main className={`mx-auto px-4 py-6 sm:px-6 relative pb-28 ${isCinemaMode ? "max-w-screen-2xl" : "max-w-7xl"}`}>
+      <main className="w-full px-4 sm:px-6 lg:px-8 py-6 relative pb-28">
         <div className={`grid grid-cols-1 ${isCinemaMode ? "lg:grid-cols-1" : "lg:grid-cols-12"} gap-6 items-start`}>
           
           {/* Left panel: Video Player and selected channel information */}
@@ -1640,12 +1640,12 @@ export default function App() {
       </main>
 
       {/* Humble platform footer */}
-      <footer className={`border-t py-8 px-4 mt-12 text-center text-xs transition-colors ${
+      <footer className={`border-t py-8 px-4 sm:px-6 lg:px-8 mt-12 text-center text-xs transition-colors ${
         darkMode 
           ? "border-zinc-900 bg-zinc-950/40 text-zinc-500" 
           : "border-slate-200 bg-slate-50 text-slate-500"
       }`}>
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="w-full mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
             <Tv className={`w-4 h-4 ${darkMode ? 'text-blue-400' : 'text-[#004993]'}`} />
             <span className="font-bold font-secondary">Desarrollado por Aitor Santana © 2026</span>
@@ -1663,7 +1663,7 @@ export default function App() {
         <div className={`fixed flex items-center bottom-0 left-0 right-0 z-40 border-t shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] transition-colors h-14 ${
           darkMode ? "bg-zinc-950/95 backdrop-blur border-zinc-800" : "bg-white/95 backdrop-blur border-slate-200"
         }`}>
-          <div className="max-w-7xl mx-auto w-full px-4 flex items-center justify-start gap-3 overflow-x-auto no-scrollbar">
+          <div className="w-full px-4 sm:px-6 lg:px-8 mx-auto flex items-center justify-start gap-3 overflow-x-auto no-scrollbar">
             <span className={`text-[10px] font-bold tracking-wider whitespace-nowrap hidden sm:inline-block ${darkMode ? "text-zinc-500" : "text-slate-500"}`}>
               VISTOS RECIENTEMENTE
             </span>
